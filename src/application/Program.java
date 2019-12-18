@@ -6,91 +6,201 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Scanner;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import conexao.conecta;
+
 public class Program {
 
-	public static void main(String[] args) throws IOException {
-		FileReader chaves = (new FileReader("C:\\temp\\Chaves"));
-		Scanner sc = new Scanner(chaves);
-		File diretorio = new File("C:\\temp\\MG");
-		File[] listFile = diretorio.listFiles();
+	public static void main(String[] args) throws IOException, SQLException {
+		
+		conecta con = new conecta();
+		String ip = "";
+		String vta = "";
+		String usuario = "";
+		String senha = "";
+		StringBuilder sb = new StringBuilder();
+		sb.append("SELECT DISTINCT B3KEY FROM BOLTO3 ");
+		sb.append("WHERE B3KEY NOT IN (SELECT BXKEY FROM BPEXML WHERE BXKEY = B3KEY) ");
+//		sb.append("AND SUBSTRING(B3KEY,3,4) IN ('1911') ");
+		sb.append("and b3da <= 191101 and b3da >= 191001");
+		PreparedStatement pstm = con.conecta(ip, vta, usuario, senha).prepareStatement(sb.toString());
+		ResultSet rs = pstm.executeQuery();
+		ArrayList<String> chaveArquivo = new ArrayList<>();
 
-		// File[] listDiretorios = diretorio.listFiles();
-		FileWriter txtInsert = new FileWriter("C:\\temp\\inserts.sql");
+		while (rs.next()) {
+			chaveArquivo.add(rs.getString("b3key"));
+		}
+		con.fecharConexao();
+		rs.close();
+		pstm.close();
 
-		String line = sc.nextLine();
-		String chaveArquivo[] = line.split(",");
 
 		ArrayList<String> listaDeArquivosString = new ArrayList<>();
 		ArrayList<String> listaDeDiretorioString = new ArrayList<>();
+		ArrayList<String> listaDeCNPJString = new ArrayList<>();
+		ArrayList<String> ChaveJaUsada = new ArrayList<>();
+		File CNPJ = new File("C:\\temp\\CNPJ");
 
-		for (int i = 0; i < listFile.length; i++) {
-			listaDeDiretorioString.add(listFile[i].toString());
-		}
+		File[] listCNPJ = CNPJ.listFiles();
+		preencherListaDeCaminhosdeDiretorios(listaDeDiretorioString, listaDeCNPJString, listCNPJ);
 
-		// for (int i = 0; i < listDiretorios.length; i++) {
-		// listaDeDiretorioString.add(listDiretorios[i].toString());
-		// }
+//			deletarArquivos(listaDeDiretorioString);
+		preencherListaDeCaminhosDeArquivos(listaDeArquivosString, listaDeDiretorioString);
+
+		boolean ba = false;
+        int contadorQuery =0;
+        int qtdChaveEncontradas = 0;
+        int qtdChaveNaoEncontradas = 0;
+        ArrayList<String> ListaDeInserts = new ArrayList<>();
+        StringBuilder queryInsert = new StringBuilder();
+        for (int i = 0; i < chaveArquivo.size(); i++) {
+            for (int j = 0; j < listaDeArquivosString.size(); j++) {
+                if (listaDeArquivosString.get(j).contains(chaveArquivo.get(i)) && listaDeArquivosString.get(j).endsWith("_BPeRecepcao_E.xml") && !ChaveJaUsada.contains(chaveArquivo.get(i))) {
+                    boolean insertSucess = false;
+                    int contador = 0;
+                    while (insertSucess == false && contador <= 4) {
+                        contador++;
+                        try {
+                            String nomeArquivo = listaDeArquivosString.get(j);
+                            FileReader bf = (new FileReader(nomeArquivo));
+                            Scanner scc = new Scanner(bf);
+                            StringBuilder sbba = new StringBuilder();
+                            while(scc.hasNext()) {
+                            	sbba.append(scc.nextLine());
+                            }
+							if (!sbba.toString().isEmpty()) {
+                            String xml = sbba.toString();
+                            if(contadorQuery == 0) {
+                            queryInsert.append("insert into bpexml values('" + chaveArquivo.get(i) + "','" + xml.replace("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>", "")+ "')");
+                            contadorQuery++;
+                            }else if(contadorQuery > 0 && contadorQuery < 3 ) {
+                                queryInsert.append(",('" + chaveArquivo.get(i) + "','" + xml+ "')");    
+                                contadorQuery++;
+                            }  if(contadorQuery == 3) {
+                                queryInsert.append(",('" + chaveArquivo.get(i) + "','" + xml+ "')");
+                                ListaDeInserts.add(queryInsert.toString());
+                                contadorQuery = 0;
+                                queryInsert.setLength(0);
+                            }
+                            
+                            System.out.println("Chave " + chaveArquivo.get(i) + " encontrada!");
+                            ba = true;
+                            ChaveJaUsada.add(chaveArquivo.get(i));
+                            scc.close();
+                            }
+                            insertSucess = true;
+                        } catch (Exception e) {
+                            System.out.println("Houve um erro no processo de insert!");
+                            System.out.println("Tentando novamente!");
+                        }
+                    }
+//                    listaDeArquivosString.remove(j);
+//                    chaveArquivo.remove(i);
+                } else {
+                }
+            }
+            if (ba == true) {
+                qtdChaveEncontradas++;
+            } else {
+                qtdChaveNaoEncontradas++;
+            }
+        }
+        conecta conexao2 = new conecta();
+        for (int i = 0; i < ListaDeInserts.size(); i++) {
+        	 PreparedStatement insert = conexao2.conecta(ip, vta, usuario, senha).prepareStatement(ListaDeInserts.get(i));
+             insert.executeUpdate();
+             System.out.println("INSERT "+i+" DE "+ListaDeInserts.size());
+        }
+        conexao2.fecharConexao();
+        //deletarArquivos(listaDeDiretorioString);
+        System.out.println("Quantidade de Chaves encontradas: " + qtdChaveEncontradas);
+        System.out.println("Quantidade de Chaves nao encontradas: " + qtdChaveNaoEncontradas);
+    }
+
+	private static void preencherListaDeCaminhosDeArquivos(ArrayList<String> listaDeArquivosString,	ArrayList<String> listaDeDiretorioString) {
+		
 		for (int i = 0; i < listaDeDiretorioString.size(); i++) {
 			File diretorioEstado = new File(listaDeDiretorioString.get(i));
-			File[] listaArquivos = diretorioEstado.listFiles();
-			System.out.println(diretorioEstado);
-			String name = "2019".concat("09").concat(diretorioEstado.getName().toString()).concat(".zip");
-			File zip = new File(
-					"C:\\temp\\MG\\".concat(diretorioEstado.getName().toString()).concat("\\").concat(name));
+		
+			String name = "2019".concat(diretorioEstado.toString().substring(36, 38)).concat(diretorioEstado.getName().toString()).concat(".zip");
+			File zip = new File(diretorioEstado.toString().concat("\\").concat(name));
 
-			if (zip.exists()) {
-				processarEnvioArquivoZip(diretorioEstado, zip);
-			}
+//			if (zip.exists() ) {
+//				System.out.println("Dezipando arquivo : " + zip.getName());
+//				processarEnvioArquivoZip(diretorioEstado, zip);
+//			
+//			}
+			
+			File[] listaArquivos = diretorioEstado.listFiles();
+
 			for (int j = 0; j < listaArquivos.length; j++) {
 				if (listaArquivos[j].toString().endsWith("BPeRecepcao_E.xml")) {
-					// System.out.println(listaArquivos[j].toString());
+					System.out.println(listaArquivos[j].toString());
 					listaDeArquivosString.add(listaArquivos[j].toString());
 				}
 			}
 		}
+	}
 
-		boolean ba = false;
-		int qtdChaveEncontradas = 0;
-		int qtdChaveNaoEncontradas = 0;
-		for (int i = 0; i < chaveArquivo.length; i++) {
-			for (int j = 0; j < listaDeArquivosString.size(); j++) {
-				if (listaDeArquivosString.get(j).contains(chaveArquivo[i])
-						&& listaDeArquivosString.get(j).endsWith("_BPeRecepcao_E.xml")) {
-					String nomeArquivo = listaDeArquivosString.get(j);
-					FileReader bf = (new FileReader(nomeArquivo));
-					Scanner scc = new Scanner(bf);
-					String xml = scc.nextLine();
-					 txtInsert.write("insert into bpexml values('" + chaveArquivo[i] + "','" + xml
-					 + "');\r\n");
-//					txtInsert.write(
-//							"update bpexml set bxdta = '" + xml + "'" + "where bxkey='" + chaveArquivo[i] + "';\r\n");
-					ba = true;
-				} else {
-//					String nomeArquivo = listaDeArquivosString.get(j);
-//					File bf = (new File(nomeArquivo));
-//					bf.delete();
-//					listaDeArquivosString.remove(nomeArquivo);
+	private static void preencherListaDeCaminhosdeDiretorios(ArrayList<String> listaDeDiretorioString, ArrayList<String> listaDeCNPJString, File[] listCNPJ) {
+		
+		for (int j = 0; j < listCNPJ.length; j++) {
+			
+			listaDeCNPJString.add(listCNPJ[j].toString());
+			
+			
+			File diretorio = new File(listaDeCNPJString.get(j));
+			File[] listFile = diretorio.listFiles();
+			
+			for (int i = 0; i < listFile.length; i++) {
+
+				File data = new File(listFile[i].toString().concat("\\2019"));
+				
+				File[] listData = data.listFiles();
+				
+				if (listData != null) {
+					
+					for (int k = 0; k < listData.length; k++) {
+						
+						File Datas = new File(listData[k].toString());
+						
+						File[] listDatas = Datas.listFiles();
+						
+						for (int z = 0; z < listDatas.length; z++) {
+							listaDeDiretorioString.add(listDatas[z].toString());
+						}
+					}
 				}
-			}
-			if (ba == true) {
-				qtdChaveEncontradas++;
-			} else {
-				qtdChaveNaoEncontradas++;
+
 			}
 		}
-		txtInsert.close();
-		System.out.println("Quantidade de Chaves encontradas: " + qtdChaveEncontradas);
-		System.out.println("Quantidade de Chaves não encontradas: " + qtdChaveNaoEncontradas);
+	}
+
+	private static void deletarArquivos(ArrayList<String> listaDeDiretorioString) {
+		for (int i = 0; i < listaDeDiretorioString.size(); i++) {
+			File diretorioEstado = new File(listaDeDiretorioString.get(i));
+			File[] listaArquivos = diretorioEstado.listFiles();
+			for (int p = 0; p < listaArquivos.length; p++) {
+				if (listaArquivos[p].toString().contains(".xml")) {
+					System.out.println("Deletando arquivo: " + listaArquivos[p].toString());
+					listaArquivos[p].delete();
+				}
+			}
+		}
 	}
 
 	private static void processarEnvioArquivoZip(File diretorioUnzip, File arquivo) {
 		try {
-			byte[] buffer = new byte[1024];
+			byte[] buffer = new byte[4024];
 			ZipInputStream zis = new ZipInputStream(new FileInputStream(arquivo));
 			ZipEntry zipEntry = zis.getNextEntry();
 
