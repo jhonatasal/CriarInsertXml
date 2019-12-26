@@ -4,14 +4,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Scanner;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -25,13 +23,15 @@ public class Program {
 		conecta con = new conecta();
 		String ip = "";
 		String vta = "";
+		LocalDate data = LocalDate.now().plusDays(-1);
+		System.out.println(data);
 		String usuario = "";
 		String senha = "";
 		StringBuilder sb = new StringBuilder();
 		sb.append("SELECT DISTINCT B3KEY FROM BOLTO3 ");
 		sb.append("WHERE B3KEY NOT IN (SELECT BXKEY FROM BPEXML WHERE BXKEY = B3KEY) ");
-//		sb.append("AND SUBSTRING(B3KEY,3,4) IN ('1911') ");
-		sb.append("and b3da <= 191101 and b3da >= 191001");
+//		sb.append("SELECT B3KEY,B3KEYC,B3DA FROM BOLTO3 WHERE B3KEY = '' AND B3KEYC <> ''  AND B3DA >= 191024 AND B3DA <=191031 ");
+		sb.append("AND B3DA >= 191201 and b3da <= 191222");
 		PreparedStatement pstm = con.conecta(ip, vta, usuario, senha).prepareStatement(sb.toString());
 		ResultSet rs = pstm.executeQuery();
 		ArrayList<String> chaveArquivo = new ArrayList<>();
@@ -82,10 +82,10 @@ public class Program {
                             if(contadorQuery == 0) {
                             queryInsert.append("insert into bpexml values('" + chaveArquivo.get(i) + "','" + xml.replace("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>", "")+ "')");
                             contadorQuery++;
-                            }else if(contadorQuery > 0 && contadorQuery < 3 ) {
+                            }else if(contadorQuery > 0 && contadorQuery < 1) {
                                 queryInsert.append(",('" + chaveArquivo.get(i) + "','" + xml+ "')");    
                                 contadorQuery++;
-                            }  if(contadorQuery == 3) {
+                            }  if(contadorQuery == 1) {
                                 queryInsert.append(",('" + chaveArquivo.get(i) + "','" + xml+ "')");
                                 ListaDeInserts.add(queryInsert.toString());
                                 contadorQuery = 0;
