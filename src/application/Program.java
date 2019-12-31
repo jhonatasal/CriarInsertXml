@@ -31,7 +31,7 @@ public class Program {
 		sb.append("SELECT DISTINCT B3KEY FROM BOLTO3 ");
 		sb.append("WHERE B3KEY NOT IN (SELECT BXKEY FROM BPEXML WHERE BXKEY = B3KEY) ");
 //		sb.append("SELECT B3KEY,B3KEYC,B3DA FROM BOLTO3 WHERE B3KEY = '' AND B3KEYC <> ''  AND B3DA >= 191024 AND B3DA <=191031 ");
-		sb.append("AND B3DA >= 191201 and b3da <= 191222");
+		sb.append("AND B3DA =191030");
 		PreparedStatement pstm = con.conecta(ip, vta, usuario, senha).prepareStatement(sb.toString());
 		ResultSet rs = pstm.executeQuery();
 		ArrayList<String> chaveArquivo = new ArrayList<>();
@@ -79,14 +79,13 @@ public class Program {
                             }
 							if (!sbba.toString().isEmpty()) {
                             String xml = sbba.toString();
-                            if(contadorQuery == 0) {
-                            queryInsert.append("insert into bpexml values('" + chaveArquivo.get(i) + "','" + xml.replace("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>", "")+ "')");
+                             if(contadorQuery == 0) {
+                            queryInsert.append("insert into bpexml values('" + chaveArquivo.get(i) + "','" + replaceXML(xml)+ "')");
                             contadorQuery++;
                             }else if(contadorQuery > 0 && contadorQuery < 1) {
-                                queryInsert.append(",('" + chaveArquivo.get(i) + "','" + xml+ "')");    
+                                queryInsert.append(",('" + chaveArquivo.get(i) + "','" + replaceXML(xml)+ "')");    
                                 contadorQuery++;
                             }  if(contadorQuery == 1) {
-                                queryInsert.append(",('" + chaveArquivo.get(i) + "','" + xml+ "')");
                                 ListaDeInserts.add(queryInsert.toString());
                                 contadorQuery = 0;
                                 queryInsert.setLength(0);
@@ -115,16 +114,20 @@ public class Program {
             }
         }
         conecta conexao2 = new conecta();
-        for (int i = 0; i < ListaDeInserts.size(); i++) {
-        	 PreparedStatement insert = conexao2.conecta(ip, vta, usuario, senha).prepareStatement(ListaDeInserts.get(i));
+        for (String query : ListaDeInserts) {
+        	 PreparedStatement insert = conexao2.conecta(ip, vta, usuario, senha).prepareStatement(query);
              insert.executeUpdate();
-             System.out.println("INSERT "+i+" DE "+ListaDeInserts.size());
+             System.out.println(query);
         }
         conexao2.fecharConexao();
         //deletarArquivos(listaDeDiretorioString);
         System.out.println("Quantidade de Chaves encontradas: " + qtdChaveEncontradas);
         System.out.println("Quantidade de Chaves nao encontradas: " + qtdChaveNaoEncontradas);
     }
+
+	private static String replaceXML(String xml) {
+		return xml.replace("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>", "").replace("<tbpe>", "").replace("</tbpe>", "").replace("<bPe>", "<BPe xmlns=\"http://www.portalfiscal.inf.br/bpe\">").replace("</bPe>", "</BPe>").replace("<vBP>", " <vBP>").replace("</vBP>", "</vBP>");
+	}
 
 	private static void preencherListaDeCaminhosDeArquivos(ArrayList<String> listaDeArquivosString,	ArrayList<String> listaDeDiretorioString) {
 		
